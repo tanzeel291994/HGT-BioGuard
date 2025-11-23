@@ -1,6 +1,6 @@
 # HGT-BioGuard: COVID-19 Spread Analysis via Heterogeneous Graph Networks
 
-![HGT-BioGuard](images/Screenshot%202025-11-24%20at%203.46.34%20AM.png)
+![HGT-BioGuard Network Diagram](images/hgt-network-diagram.png)
 
 ## 🧬 Overview
 
@@ -56,7 +56,7 @@ The project implements a **Heterogeneous Graph Transformer (HGT)** that:
 - Learns to predict transmission routes based on historical patterns
 - Integrates biological and mobility data for comprehensive analysis
 
-![Network Visualization](images/Screenshot%202025-11-24%20at%203.46.52%20AM.png)
+![Network Visualization](images/hgt-visualization.png)
 
 ## 🚀 Getting Started
 
