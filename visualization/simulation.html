@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Def/Acc Biosurveillance Simulation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background: #1a1a1a; color: white; }
+        #map { width: 100vw; height: 100vh; }
+        #controls {
+            position: absolute; bottom: 30px; left: 30px; z-index: 1000;
+            background: rgba(0, 0, 0, 0.8); padding: 20px; border-radius: 8px;
+            width: 300px;
+        }
+        h2 { margin: 0 0 10px 0; font-size: 18px; color: #4fc3f7; }
+        .stat-box { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
+        .legend { margin-top: 15px; border-top: 1px solid #444; padding-top: 10px; }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        #week-display { font-size: 24px; font-weight: bold; color: #ffd700; margin: 10px 0; }
+        button {
+            background: #4fc3f7; border: none; color: black; padding: 8px 16px;
+            border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;
+        }
+        button:hover { background: #81d4fa; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="controls">
+    <h2>Predictive Biosurveillance</h2>
+    <div id="week-display">Week 0</div>
+    
+    <div class="stat-box">
+        <span>AI Alerts Issued:</span> <span id="pred-count">0</span>
+    </div>
+    <div class="stat-box">
+        <span>Confirmed Outbreaks:</span> <span id="actual-count">0</span>
+    </div>
+    <div class="stat-box">
+        <span>Successful Interceptions:</span> <span id="hits-count" style="color: #00e676">0</span>
+    </div>
+    <div class="stat-box">
+        <span>Missed Outbreaks:</span> <span id="missed-count" style="color: #ff9e80">0</span>
+    </div>
+
+    <div class="legend">
+        <div><span class="dot" style="background: rgba(255, 0, 80, 0.6); border: 2px solid #ff0050;"></span> AI Alert (High Risk)</div>
+        <div><span class="dot" style="background: #4fc3f7;"></span> Confirmed Outbreak</div>
+    </div>
+    
+    <br>
+    <button onclick="togglePlay()">Play / Pause</button>
+</div>
+
+<script>
+    // Initialize Map
+    const map = L.map('map').setView([20, 0], 2);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CartoDB'
+    }).addTo(map);
+
+    let simulationData = [];
+    let currentIndex = 0;
+    let intervalId = null;
+    let layers = { predicted: [], actual: [] };
+
+    // Load Data
+    fetch('simulation_data.json')
+        .then(response => response.json())
+        .then(data => {
+            simulationData = data;
+            updateFrame(0);
+        })
+        .catch(err => console.error("Error loading data:", err));
+
+    function updateFrame(index) {
+        const frame = simulationData[index];
+        if (!frame) return;
+
+        document.getElementById('week-display').innerText = frame.week;
+        document.getElementById('pred-count').innerText = frame.predicted.length;
+        document.getElementById('actual-count').innerText = frame.actual.length;
+
+        // Clear old layers
+        layers.predicted.forEach(l => map.removeLayer(l));
+        layers.actual.forEach(l => map.removeLayer(l));
+        layers.predicted = [];
+        layers.actual = [];
+
+        // 1. Draw Predictions (Red Zones)
+        // We store codes to check for hits
+        const predictedCodes = new Set(frame.predicted.map(p => p.code));
+        
+        let hits = 0;
+
+        // Draw Predictions as large pulsing circles
+        frame.predicted.forEach(p => {
+            const circle = L.circleMarker([p.lat, p.lon], {
+                radius: 15,
+                fillColor: '#ff0050',
+                color: '#ff0050',
+                weight: 2,
+                opacity: 0.8,
+                fillOpacity: 0.2
+            }).addTo(map);
+            circle.bindPopup(`<b> FALSE ALARM (Precautionary)</b><br>${p.code}`);
+            layers.predicted.push(circle);
+        });
+
+        // 2. Draw Actual (Blue Dots)
+        frame.actual.forEach(a => {
+            const isHit = predictedCodes.has(a.code);
+            if (isHit) hits++;
+
+            const circle = L.circleMarker([a.lat, a.lon], {
+                radius: 5,
+                fillColor: isHit ? '#00e676' : '#4fc3f7', // Green if detected, Blue if missed
+                color: 'white',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map);
+            
+            const status = isHit ? "SUCCESS: Outbreak Predicted" : " MISSED (Low Priority)";
+            circle.bindPopup(`<b>${status}</b><br>${a.code}`);
+            layers.actual.push(circle);
+        });
+
+        document.getElementById('hits-count').innerText = hits;
+        document.getElementById('missed-count').innerText = frame.actual.length - hits;
+    }
+
+    function togglePlay() {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        } else {
+            intervalId = setInterval(() => {
+                currentIndex++;
+                if (currentIndex >= simulationData.length) currentIndex = 0;
+                updateFrame(currentIndex);
+            }, 1000); // 1 second per week
+        }
+    }
+</script>
+</body>
+</html>

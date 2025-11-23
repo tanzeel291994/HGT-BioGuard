@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Graph Structure Explorer</title>
+    <script src="//unpkg.com/3d-force-graph"></script>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #000011; color: white; overflow: hidden; }
+        #graph-container { width: 100vw; height: 100vh; }
+        
+        /* CONTROLS (Top Left) */
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            width: 260px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        h1 { margin: 0 0 10px 0; font-size: 24px; color: #00f2ff; text-shadow: 0 0 10px rgba(0, 242, 255, 0.5); }
+        p { margin: 5px 0; font-size: 14px; color: #aaa; }
+        
+        .legend-item { display: flex; align-items: center; margin: 5px 0; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 5px currentColor; }
+        
+        #stats { margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .stat-val { font-weight: bold; color: white; }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            pointer-events: auto;
+        }
+         /* INFO BOX (Top Right) - FIXED POSITION */
+         #info-box {
+            position: absolute;
+            top: 20px;
+            right: 20px; /* Move to Right side */
+            background: rgba(0, 20, 40, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #00f2ff;
+            width: 280px;
+            display: none; /* Hidden by default */
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+            z-index: 1000;
+        }
+         /* Toggle Switches Style */
+         .control-group { 
+            display: flex; 
+            align-items: center; 
+            margin-bottom: 12px; 
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+        .control-group:hover { background: rgba(255,255,255,0.1); }
+        
+        input[type="checkbox"] { 
+            margin-right: 12px; 
+            transform: scale(1.2); 
+            accent-color: #00f2ff; 
+            cursor: pointer;
+        }
+        
+        .label-text { font-size: 14px; color: #eee; }
+        
+        hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
+        /* Optional: Make text cleaner */
+        #info-content p { margin: 5px 0; color: #ddd; font-size: 13px; }
+        #info-content strong { color: #00f2ff; }
+        button {
+            background: #00f2ff; color: #000; border: none; padding: 10px 20px;
+            border-radius: 4px; font-weight: bold; cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { background: #fff; box-shadow: 0 0 15px #00f2ff; }
+
+        /* FILTER BOX (Bottom Right) */
+        #filter-box {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            width: 220px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        #filter-box h3 { margin: 0 0 10px 0; font-size: 16px; color: #00f2ff; border-bottom: 1px solid #333; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="graph-container"></div>
+
+    <div id="ui-overlay">
+        <h1>GNN Knowledge Graph</h1>
+        <p>Visualizing the raw Heterogeneous Graph structure used by the AI.</p>
+        
+        <div style="margin-top: 15px;">
+            <div class="legend-item"><div class="dot" style="background: #00f2ff; color: #00f2ff;"></div>Airport Nodes</div>
+            <div class="legend-item"><div class="dot" style="background: #ff0055; color: #ff0055;"></div>Lineage (Virus) Nodes</div>
+            <div class="legend-item"><div class="dot" style="background: #ffe600; color: #ffe600;"></div>Flight Connections</div>
+            <div class="legend-item"><div class="dot" style="background: #00ff66; color: #00ff66;"></div>Infection Events</div>
+        </div>
+
+        <div id="stats">
+            <div class="stat-row"><span>Airports:</span> <span id="count-airports" class="stat-val">0</span></div>
+            <div class="stat-row"><span>Lineages:</span> <span id="count-lineages" class="stat-val">0</span></div>
+            <div class="stat-row"><span>Connections:</span> <span id="count-edges" class="stat-val">0</span></div>
+        </div>
+    </div>
+    <!-- RIGHT PANEL: Details Box -->
+    <div id="info-box">
+        <h2 id="info-title" style="color:#00f2ff; margin-top:0;">Details</h2>
+        <div id="info-content" style="line-height:1.6;">Select a node...</div>
+        <button class="action-btn" style="background:#333; margin-top:15px;" onclick="document.getElementById('info-box').style.display='none'">Close Panel</button>
+    </div>
+    <div id="controls">
+        <button onclick="toggleRotation()">⏯ Toggle Rotation</button>
+    </div>
+
+    <!-- FILTER BOX -->
+    <div id="filter-box">
+        <h3>Data Filters</h3>
+        
+        <div class="control-group">
+            <input type="checkbox" id="show-airports" checked onchange="updateGraphFilter()">
+            <label for="show-airports" class="label-text">Airports</label>
+        </div>
+        
+        <div class="control-group">
+            <input type="checkbox" id="show-lineages" checked onchange="updateGraphFilter()">
+            <label for="show-lineages" class="label-text">Virus Lineages</label>
+        </div>
+        
+        <hr>
+        
+        <div class="control-group">
+            <input type="checkbox" id="show-flights" checked onchange="updateGraphFilter()">
+            <label for="show-flights" class="label-text">Flight Routes</label>
+        </div>
+        <div class="control-group">
+            <input type="checkbox" id="hide-orphans" onchange="updateGraphFilter()">
+            <label for="hide-orphans" class="label-text">Hide Unconnected</label>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const MAX_NODES = 2000; 
+        let isRotating = true;
+        let allNodes = [];
+        let allLinks = [];
+
+        // Initialize Graph
+        const Graph = ForceGraph3D()
+            (document.getElementById('graph-container'))
+            .backgroundColor('#000011')
+            .nodeLabel('name')
+            .nodeColor(node => node.group === 'airport' ? '#00f2ff' : '#ff0055')
+            .nodeVal(node => node.group === 'airport' ? 5 : 10) 
+            .linkColor(link => link.type === 'flight' ? 'rgba(255, 230, 0, 0.2)' : 'rgba(0, 255, 102, 0.4)')
+            .linkWidth(link => link.type === 'flight' ? 1 : 2)
+            .linkDirectionalParticles(link => link.type === 'flight' ? 2 : 0) 
+            .linkDirectionalParticleSpeed(0.005)
+            .linkDirectionalParticleWidth(2)
+            .d3VelocityDecay(0.6) 
+            .cooldownTime(3000)   
+            .onNodeClick(node => {
+
+                showNodeInfo(node);
+                isRotating = false;
+
+                const distance = 150;
+                const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+
+                const newPos = node.x || node.y || node.z
+                    ? { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }
+                    : { x: 0, y: 0, z: 150 }; 
+
+                Graph.cameraPosition(
+                    newPos, 
+                    node,   
+                    3000    
+                );
+            });
+
+        // Load Data
+        fetch('graph_data_viz.json')
+            .then(res => res.json())
+            .then(data => {
+                console.log("Data loaded:", data);
+                
+                // Store globally
+                allNodes = data.nodes.map(n => ({
+                    ...n,
+                    id: n.id,
+                    name: n.name,
+                    group: n.type 
+                }));
+
+                allLinks = data.links.map(e => ({
+                    source: e.source,
+                    target: e.target,
+                    type: e.type 
+                }));
+
+                // Initial Render
+                updateGraphFilter();
+            })
+            .catch(err => console.error("Error loading graph data:", err));
+
+            function updateGraphFilter() {
+            const showAirports = document.getElementById('show-airports').checked;
+            const showLineages = document.getElementById('show-lineages').checked;
+            const showFlights = document.getElementById('show-flights').checked;
+            const hideOrphans = document.getElementById('hide-orphans').checked; // New toggle
+
+            // 1. Initial Node Filter
+            let filteredNodes = allNodes.filter(n => {
+                if (n.group === 'airport' && showAirports) return true;
+                if (n.group === 'lineage' && showLineages) return true;
+                return false;
+            });
+            
+            let validNodeIds = new Set(filteredNodes.map(n => n.id));
+
+            // 2. Link Filter
+            const filteredLinks = allLinks.filter(l => {
+                if (l.type === 'flight' && !showFlights) return false;
+                
+                const sourceId = l.source.id || l.source;
+                const targetId = l.target.id || l.target;
+                
+                return validNodeIds.has(sourceId) && validNodeIds.has(targetId);
+            });
+
+            // 3. Optional: Filter Orphans
+            if (hideOrphans) {
+                const connectedNodeIds = new Set();
+                filteredLinks.forEach(l => {
+                    connectedNodeIds.add(l.source.id || l.source);
+                    connectedNodeIds.add(l.target.id || l.target);
+                });
+                
+                filteredNodes = filteredNodes.filter(n => connectedNodeIds.has(n.id));
+            }
+
+            Graph.graphData({ nodes: filteredNodes, links: filteredLinks });
+
+            // Update UI Stats
+            document.getElementById('count-airports').innerText = filteredNodes.filter(n => n.group === 'airport').length;
+            document.getElementById('count-lineages').innerText = filteredNodes.filter(n => n.group === 'lineage').length;
+            document.getElementById('count-edges').innerText = filteredLinks.length;
+        }
+
+        // Auto Rotation
+        let angle = 0;
+        setInterval(() => {
+            if (isRotating) {
+                Graph.cameraPosition({
+                    x: 1000 * Math.cos(angle),
+                    z: 1000 * Math.sin(angle)
+                });
+                angle += Math.PI / 3000; 
+            }
+        }, 16);
+
+        function toggleRotation() {
+            isRotating = !isRotating;
+        }
+        function showNodeInfo(node) {
+            const box = document.getElementById('info-box');
+            const title = document.getElementById('info-title');
+            const content = document.getElementById('info-content');
+            console.log(node);
+            // Show the box
+            box.style.display = 'block';
+            
+            // Set Title
+            title.innerText = node.group === 'airport' ? '✈️ Airport Details' : '🦠 Virus Lineage';
+            
+            // Build Content
+            let html = `<p><strong>ID:</strong> ${node.id}</p>`;
+            
+            if (node.group === 'airport') {
+                // Use metadata if available, else fallback
+                const city = node.city && node.city !== 'Unknown City' ? node.city : 'N/A';
+                const country = node.country && node.country !== 'Unknown Country' ? node.country : 'N/A';
+                
+                html += `<p><strong>Code:</strong> ${node.code || node.name}</p>`;
+                html += `<p><strong>City:</strong> ${city}</p>`;
+                html += `<p><strong>Country:</strong> ${country}</p>`;
+                // html += `<p><strong>Coords:</strong> ${node.lat?.toFixed(1)}, ${node.lon?.toFixed(1)}</p>`;
+            } else {
+                console.log(node);
+                html += `<p><strong>Variant:</strong> ${node.name}</p>`;
+                html += `<p><strong>Type:</strong> Viral Lineage</p>`;
+            }
+            
+            content.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

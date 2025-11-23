@@ -1,0 +1,9 @@
+data/
+proptech_data/
+.DS_Store
+data1/
+visualization/graph_data_full.json
+visualization/simulation_data.json
+__pycache__/
+gcn.ipynb
+*.docx
